@@ -219,6 +219,7 @@ def verify_audio(
     duration_min: float,
     duration_max: float,
     seam_max: float | None,
+    edge_max: float | None,
 ) -> dict:
     if not path.exists():
         raise AudioCheckError(f"audio missing: {path}")
@@ -245,14 +246,16 @@ def verify_audio(
     if seam_max is not None and seam > seam_max:
         raise AudioCheckError(f"{path}: loop seam {seam:.5f} exceeds {seam_max}")
 
-    edge = min(samples(0.01, measured_rate), max(1, data.size // 2))
-    first_step = float(np.max(np.abs(np.diff(data[:edge])))) if edge > 1 else 0.0
-    last_step = float(np.max(np.abs(np.diff(data[-edge:])))) if edge > 1 else 0.0
+    # One-shot clips must start and end near silence; a loop may start at any
+    # phase as long as its seam is continuous.
+    edge_step = max(float(abs(data[0])), float(abs(data[-1])))
+    if edge_max is not None and edge_step > edge_max:
+        raise AudioCheckError(f"{path}: boundary amplitude {edge_step:.5f} exceeds {edge_max}")
     return {
         "path": str(path),
         "duration": round(duration, 4),
         "peak": round(peak, 4),
         "rms": round(rms, 4),
         "seam": round(seam, 6),
-        "edge_step": round(max(first_step, last_step), 6),
+        "edge_step": round(edge_step, 6),
     }

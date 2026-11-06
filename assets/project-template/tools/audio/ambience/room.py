@@ -101,6 +101,7 @@ def build(root: Path) -> dict:
         duration_min=7.9,
         duration_max=8.1,
         seam_max=0.04,
+        edge_max=ROOM["edge_max"],
     )
     return {
         "kind": "audio",

@@ -11,6 +11,7 @@ HIT = {
     "crack_high": 5200.0,
     "crack_decay": 0.028,
     "peak": 0.70,
+    "edge_max": 0.02,
 }
 
 ROOM = {
@@ -24,4 +25,5 @@ ROOM = {
     "drip_count": 5,
     "drip_gain": 0.10,
     "peak": 0.50,
+    "edge_max": None,
 }

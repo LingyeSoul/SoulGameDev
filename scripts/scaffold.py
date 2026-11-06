@@ -11,6 +11,8 @@ import shutil
 from pathlib import Path
 
 TEMPLATE = Path(__file__).resolve().parents[1] / "assets" / "project-template"
+EXCLUDED_DIRS = {"__pycache__", ".git"}
+EXCLUDED_SUFFIXES = {".pyc", ".pyo"}
 
 
 def copy_template(template: Path, target: Path, dry_run: bool) -> list[Path]:
@@ -25,6 +27,10 @@ def copy_template(template: Path, target: Path, dry_run: bool) -> list[Path]:
         if source.is_dir():
             continue
         relative = source.relative_to(template)
+        if any(part in EXCLUDED_DIRS for part in relative.parts):
+            continue
+        if source.suffix in EXCLUDED_SUFFIXES:
+            continue
         destination = target / relative
         if destination.exists():
             conflicts.append(destination)

@@ -119,7 +119,10 @@ def main() -> None:
     manifest: dict = {"clips": {}}
     for path in selected:
         module, relative = load_module(path, audio_tools)
-        metadata = module.build(root)
+        try:
+            metadata = module.build(root)
+        except RuntimeError as exc:
+            raise SystemExit(f"{relative}: {exc}") from exc
         merge(manifest, metadata, path, root)
         print(f"[audio] {relative} -> art/{metadata['output']}")
 

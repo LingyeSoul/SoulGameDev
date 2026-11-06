@@ -49,6 +49,12 @@ def load_module(path: Path, art_tools: Path):
     return module, relative.as_posix()
 
 
+def _reserve_key(atlas: dict, key: str, module_path: Path) -> None:
+    for section in ("sheets", "images", "vectors"):
+        if key in atlas[section]:
+            raise RuntimeError(f"{module_path}: duplicate asset key {key!r}")
+
+
 def merge(atlas: dict, metadata: dict, module_path: Path, root: Path) -> None:
     for field in ("kind", "key", "output"):
         if field not in metadata:
@@ -61,24 +67,46 @@ def merge(atlas: dict, metadata: dict, module_path: Path, root: Path) -> None:
         raise RuntimeError(f"{module_path}: declared output does not exist: {asset_path}")
 
     if kind == "image":
-        if key in atlas["images"] or key in atlas["sheets"]:
-            raise RuntimeError(f"{module_path}: duplicate asset key {key!r}")
+        _reserve_key(atlas, key, module_path)
         atlas["images"][key] = f"{RESOURCE_PREFIX}art/{output}"
         return
 
-    if kind != "sheet":
-        raise RuntimeError(f"{module_path}: unknown kind {kind!r}; use 'sheet' or 'image'")
-    for field in ("cell", "pivot", "animations"):
-        if field not in metadata:
-            raise RuntimeError(f"{module_path}: sheet metadata is missing {field!r}")
-    if key in atlas["sheets"] or key in atlas["images"]:
-        raise RuntimeError(f"{module_path}: duplicate asset key {key!r}")
-    atlas["sheets"][key] = {
-        "path": f"{RESOURCE_PREFIX}art/{output}",
-        "cell": metadata["cell"],
-        "pivot": metadata["pivot"],
-        "animations": metadata["animations"],
-    }
+    if kind == "sheet":
+        for field in ("cell", "pivot", "animations"):
+            if field not in metadata:
+                raise RuntimeError(f"{module_path}: sheet metadata is missing {field!r}")
+        _reserve_key(atlas, key, module_path)
+        atlas["sheets"][key] = {
+            "path": f"{RESOURCE_PREFIX}art/{output}",
+            "cell": metadata["cell"],
+            "pivot": metadata["pivot"],
+            "animations": metadata["animations"],
+        }
+        return
+
+    if kind == "vector":
+        for field in ("raster", "size"):
+            if field not in metadata:
+                raise RuntimeError(f"{module_path}: vector metadata is missing {field!r}")
+        size = metadata["size"]
+        if (
+            not isinstance(size, list)
+            or len(size) != 2
+            or not all(isinstance(value, int) for value in size)
+        ):
+            raise RuntimeError(f"{module_path}: vector size must be [width, height], got {size!r}")
+        raster_path = root / "art" / str(metadata["raster"])
+        if not raster_path.exists():
+            raise RuntimeError(f"{module_path}: declared raster does not exist: {raster_path}")
+        _reserve_key(atlas, key, module_path)
+        atlas["vectors"][key] = {
+            "svg": f"{RESOURCE_PREFIX}art/{output}",
+            "raster": f"{RESOURCE_PREFIX}art/{metadata['raster']}",
+            "size": size,
+        }
+        return
+
+    raise RuntimeError(f"{module_path}: unknown kind {kind!r}; use 'sheet', 'image' or 'vector'")
 
 
 def write_atlas(root: Path, atlas: dict) -> Path:
@@ -90,32 +118,38 @@ def write_atlas(root: Path, atlas: dict) -> Path:
 
 def load_atlas(path: Path) -> dict:
     if not path.exists():
-        return {"sheets": {}, "images": {}}
+        return {"sheets": {}, "images": {}, "vectors": {}}
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict) or "sheets" not in data or "images" not in data:
         raise RuntimeError(f"{path}: expected an object with sheets and images")
+    data.setdefault("vectors", {})
+    if not isinstance(data["vectors"], dict):
+        raise RuntimeError(f"{path}: vectors must be an object")
     return data
 
 
 def merge_into_existing(existing: dict, fresh: dict) -> dict:
     """A partial rebuild updates its keys but keeps every other asset."""
-    for key in fresh["sheets"]:
-        existing["sheets"].pop(key, None)
-        existing["images"].pop(key, None)
-    for key in fresh["images"]:
-        existing["sheets"].pop(key, None)
-        existing["images"].pop(key, None)
-    existing["sheets"].update(fresh["sheets"])
-    existing["images"].update(fresh["images"])
+    fresh_keys: set[str] = set()
+    for section in ("sheets", "images", "vectors"):
+        fresh_keys.update(fresh[section])
+    for section in ("sheets", "images", "vectors"):
+        for key in fresh_keys:
+            existing[section].pop(key, None)
+    for section in ("sheets", "images", "vectors"):
+        existing[section].update(fresh[section])
     return existing
 
 
 def render_previews(root: Path, atlas: dict) -> None:
     meta_dir = root / "art" / "_meta"
-    for section in ("sheets", "images"):
+    for section in ("sheets", "images", "vectors"):
         for key in sorted(atlas[section]):
             info = atlas[section][key]
-            relative = info["path"] if isinstance(info, dict) else info
+            if section == "vectors":
+                relative = info["raster"]
+            else:
+                relative = info["path"] if isinstance(info, dict) else info
             if relative.startswith(RESOURCE_PREFIX):
                 relative = relative[len(RESOURCE_PREFIX):]
             source = root / relative
@@ -146,7 +180,7 @@ def main() -> None:
         if not selected:
             raise SystemExit(f"no modules matched --only {sorted(wanted)}")
 
-    atlas: dict = {"sheets": {}, "images": {}}
+    atlas: dict = {"sheets": {}, "images": {}, "vectors": {}}
     for path in selected:
         module, relative = load_module(path, art_tools)
         metadata = module.build(root)

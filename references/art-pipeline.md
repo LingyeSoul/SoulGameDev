@@ -23,25 +23,32 @@
 tools/art/
   _lib/
     pixel_lib.py          # Canvas、描边、斜面、sheet、preview；无游戏内容
-    verify.py             # 尺寸/色板/描边/底行/颜色数校验
+    svg_lib.py            # SvgCanvas、CairoSVG 光栅化；无游戏内容
+    verify.py             # 尺寸/色板/描边/底行/颜色数/SVG/PNG 校验
   _data/
     palette.py            # 角色色板 + biome 派生参数
     animations.py         # 每个 sheet 的帧表、fps、loop
+    vector.py             # 矢量资产的语义色板
   actors/
     player.py             # 只产出 art/actors/player.png
   tiles/
     layer_01_floor.py     # 只产出 art/tiles/layer_01_floor.png
   props/
     brazier.py            # 只产出 art/props/brazier.png
+  vector/
+    sigil.py              # 只产出 art/vector/sigil.svg + 派生的 sigil.png
   build.py                # 发现模块 + 合并 atlas.json
 art/
   actors/player.png       # 构建产物
   tiles/layer_01_floor.png
+  vector/sigil.svg        # 矢量源资产
+  vector/sigil.png        # CairoSVG 派生光栅，供不支持 SVG 的运行时使用
   _meta/atlas.json        # 运行时读取的图集元数据
   _meta/preview_player.png
+  _meta/preview_sigil.png
 ```
 
-命名规则：模块相对路径去掉 `.py` 就是输出相对路径。`actors/player.py` 只允许写 `art/actors/player.png`。需要写第二张图时，新建第二个模块。
+命名规则：模块相对路径去掉 `.py` 就是输出相对路径。`actors/player.py` 只允许写 `art/actors/player.png`。矢量模块的输出是 `.svg`，派生的 `.png` 必须在元数据中显式声明。需要写第二张独立图片时，新建第二个模块。
 
 ## 3. 单个资产模块的合同
 
@@ -166,7 +173,88 @@ V' = clamp(V * kV, 0, 1)
 | 灯焰闪烁 | 3 | 8 | 是 |
 | 粒子 | 6 | 10 | 否 |
 
-## 6. 图集元数据
+## 6. 矢量资产：svgwrite + CairoSVG
+
+矢量资产用于 UI、图标、Logo、描边覆盖层等需要任意分辨率清晰的图，不用于像素角色/地块。它们与像素规则**分开**：允许抗锯齿和曲线，但同样要求确定性、色板约束和构建期校验。
+
+### 6.1 分工
+
+- `svgwrite`：唯一作者。模块只调用 `SvgCanvas` 的 `rect/circle/ellipse/line/polygon/path`，不手写 XML。
+- `CairoSVG`：只做派生物。`rasterize(svg, png, scale, background)` 把同一 SVG 转成 PNG；它不参与造型，也不作为第二套源。
+- 颜色只来自 `_data/vector.py` 的 `VECTOR_PALETTE`；绘制函数不写 hex。
+- 一个模块一个 SVG 源 + 一个派生 PNG；PNG 必须写进元数据并在 `art/_meta/atlas.json` 的 `vectors` 段登记。
+
+### 6.2 合同
+
+```python
+from tools.art._data.vector import VECTOR_PALETTE
+from tools.art._lib.svg_lib import SvgCanvas, rasterize
+from tools.art._lib.verify import verify_raster, verify_vector
+
+
+def build(root: Path) -> dict:
+    canvas = SvgCanvas(64, 64, viewbox=(0.0, 0.0, 64.0, 64.0))
+    canvas.path(
+        "M ...",
+        fill=VECTOR_PALETTE["shadow"],
+        stroke=VECTOR_PALETTE["ink"],
+        stroke_width=2.0,
+    )
+    svg = root / "art" / "vector" / "sigil.svg"
+    png = root / "art" / "vector" / "sigil.png"
+    canvas.save(svg)
+    rasterize(svg, png, scale=2, background=None)
+    verify_vector(path=svg, width=64, height=64, allowed=set(VECTOR_PALETTE.values()))
+    verify_raster(path=png, width=128, height=128, require_alpha=True)
+    return {
+        "kind": "vector",
+        "key": "sigil",
+        "output": "vector/sigil.svg",
+        "raster": "vector/sigil.png",
+        "size": [64, 64],
+    }
+```
+
+### 6.3 规则
+
+| 规则 | 值 |
+|---|---|
+| 尺寸 | `<svg>` 必须有显式 `width`/`height`；有 `viewBox` 时宽高必须一致 |
+| 颜色 | 只允许 `VECTOR_PALETTE` 中的 `#rrggbb`；禁止 `url(...)`、`currentColor`、`inherit` |
+| 外部资源 | 禁止 `<image>`、`<script>`、`<foreignObject>`、`<style>`、`<filter>`、`<pattern>`、渐变、`<text>`、`<use>`、外部 `href` |
+| 文本 | 不直接用 `<text>`；字体在不同机器上不确定。需要文字时在美术侧转成路径，或把字体文件纳入项目并写清许可 |
+| 光栅化 | `scale` 为正整数；PNG 尺寸 = SVG 尺寸 × scale；需要透明的资产必须有透明像素 |
+| 确定性 | 同版本 svgwrite + CairoSVG、同一 SVG，两次构建字节一致 |
+
+`<use>` 也被禁止；需要复用形状时在模块里写函数，不要在 SVG 里做引用。
+
+### 6.4 什么时候不用 SVG
+
+- 像素角色、地块、像素 VFX：继续用 Pillow 管线，避免抗锯齿破坏像素网格。
+- 需要逐帧 8 方向、骨骼/IK、事件帧的角色：用 SpriteKiln，见 `references/spritekiln-pipeline.md`；不要用 SVG 硬拼动画。
+- 需要复杂滤镜/位图纹理：用 Pillow 或外部 DCC，SVG 只做矢量形状。
+
+### 6.5 运行时
+
+`atlas.json` 的 `vectors` 段同时给出源 SVG 和派生 PNG：
+
+```json
+"vectors": {
+  "sigil": {
+    "svg": "res://art/vector/sigil.svg",
+    "raster": "res://art/vector/sigil.png",
+    "size": [64, 64]
+  }
+}
+```
+
+Godot 4 可直接导入 SVG；其他引擎读 `raster`。不要在运行时从 SVG 现场光栅化，构建期已经完成。
+
+### 6.6 Windows 说明
+
+`pip install CairoSVG` 会带 `cairocffi`。若导入时报找不到 cairo，安装 GTK 3 运行时（或使用 WSL/Linux CI）；`rasterize()` 会给出明确错误，不会静默跳过 PNG。CI 建议固定 `CairoSVG` 与 `svgwrite` 的版本范围，换版本后重新做两次构建哈希检查。
+
+## 7. 图集元数据
 
 `build.py` 合并成 `art/_meta/atlas.json`：
 
@@ -185,6 +273,13 @@ V' = clamp(V * kV, 0, 1)
         "walk": {"frames": [[0, 2], [0, 3]], "fps": 8, "loop": true}
       }
     }
+  },
+  "vectors": {
+    "sigil": {
+      "svg": "res://art/vector/sigil.svg",
+      "raster": "res://art/vector/sigil.png",
+      "size": [64, 64]
+    }
   }
 }
 ```
@@ -192,10 +287,12 @@ V' = clamp(V * kV, 0, 1)
 - `path` 是引擎资源路径；非 Godot 项目把 `build.py` 的 `RESOURCE_PREFIX` 改掉即可。
 - `cell` 是单帧尺寸；`pivot` 是帧内像素坐标。
 - `animations.frames` 是 `[row, column]`，不是线性帧号；这样加行动画不会改运行时。
-- 运行时只读这一个 JSON 构建 `SpriteFrames` / `AtlasTexture`，**不要为每张图手写 `.tres`**。
+- `vectors` 段：`svg` 是源资产，`raster` 是 CairoSVG 派生物；Godot 4 可直接用 SVG，其他运行时读 PNG。
+- 8 方向 SpriteKiln 角色写在独立的 `art/_meta/spritekiln.json`，不混进 `atlas.json`；两者都由运行时按 key 读取。
+- 运行时只读 `atlas.json` 构建 `SpriteFrames` / `AtlasTexture`；8 方向角色读 `spritekiln.json`。
 - JSON 用 `sort_keys=True` 写出，保证两次构建的差异只来自真实内容。
 
-## 7. 每资产验收门禁
+## 8. 每资产验收门禁
 
 每个模块在 `build()` 返回前必须自检；失败信息要包含资产路径和具体原因。
 
@@ -209,8 +306,11 @@ V' = clamp(V * kV, 0, 1)
 | 6 | 底行 | 底行至少一个不透明像素 |
 | 7 | 可复现 | 连续构建两次，PNG 与 JSON 字节一致 |
 | 8 | 人眼 | 缩到原生尺寸、放到真实背景上仍能读出剪影 |
+| 9 | SVG 结构 | `width`/`height`/`viewBox` 一致；无外部引用、脚本、滤镜或 pattern |
+| 10 | 矢量颜色 | 所有 `fill`/`stroke` 来自 `VECTOR_PALETTE` |
+| 11 | 派生 PNG | 尺寸 = SVG 尺寸 × scale；需要透明的资产至少有一个透明像素 |
 
-第 8 条只能人眼判断；其余全部自动化。任何一条不过，不进入游戏资源目录。
+第 8 条只能人眼判断；其余全部自动化。矢量资产不跑像素描边/底行/颜色数检查，改跑上表 9–11；任何一条不过，构建失败，产物留在本地仅供排查，不得进入发布包。
 
 `preview()` 生成最近邻放大图，只用于人工检查，不参与运行时：
 
@@ -219,7 +319,7 @@ python tools/art/build.py --root . --preview
 # art/_meta/preview_player.png
 ```
 
-## 8. 从单体生成器迁移
+## 9. 从单体生成器迁移
 
 如果项目已经有一个几百行的 `gen_assets.py`，按下面顺序拆，**每一步都要保持输出字节不变**：
 
@@ -232,7 +332,7 @@ python tools/art/build.py --root . --preview
 
 单体生成器只允许存在于一次性原型；出现第二个资产时就拆。
 
-## 9. 命令速查
+## 10. 命令速查
 
 ```bash
 python -m pip install -r requirements.txt
@@ -242,9 +342,15 @@ python tools/art/build.py --root . --preview
 
 # 只重生成一个资产
 python tools/art/build.py --root . --only actors/player
+python tools/art/build.py --root . --only vector/sigil
 
 # 单独运行一个模块（不汇总图集）
 python tools/art/actors/player.py
+python tools/art/vector/sigil.py
+
+# 把一个 SpriteKiln 渲染接进 art/_meta/spritekiln.json
+python scripts/kiln_import.py --root . --name knight \
+  --render-dir art/specs/characters/knight/out/knight
 ```
 
 构建失败时先看模块路径，再看它声明的输出路径；不要绕过校验去改 PNG。

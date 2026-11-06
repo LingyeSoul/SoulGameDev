@@ -66,6 +66,7 @@ def build(root: Path) -> dict:
         duration_min=0.18,
         duration_max=0.22,
         seam_max=None,
+        edge_max=HIT["edge_max"],
     )
     return {
         "kind": "audio",

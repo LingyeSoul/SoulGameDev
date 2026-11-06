@@ -19,10 +19,10 @@
 ## 2. 依赖与格式合同
 
 ```bash
-python -m pip install numpy scipy soundfile "synthesizer>=0.4"
+python -m pip install numpy scipy soundfile "synthesizer>=0.4" "pyo>=1.1"
 ```
 
-`synthesizer` 负责音调层（振荡器 + 双振荡器失谐 + 低通/高通/带通 + LFO），`numpy`/`scipy` 负责噪声床、包络、滤波、混音、循环与混响。
+`synthesizer` 负责音调层（振荡器 + 双振荡器失谐 + 低通/高通/带通 + LFO），`numpy`/`scipy` 负责噪声床、包络、滤波、混音、循环与混响。`pyo` 是默认的离线 DSP 后端，适合复杂信号图；需要 Python 3.12+。
 
 统一格式（可按项目改，但必须写进校验）：
 
@@ -114,6 +114,62 @@ def exp_env(length, attack, decay, rate):
 
 滤波只用 `scipy.signal.butter(..., output="sos")` + `sosfilt`，不要手写不稳定的递归滤波。
 
+### 5.1 pyo（离线 DSP）
+
+`pyo` 用于 `synthesizer` 不方便表达的复杂图：多级滤波、延迟/混响、颗粒、参数曲线。它是默认依赖，需要 Python 3.12+。
+
+安装：
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+统一走 `_lib/pyo_lib.py` 的离线渲染：
+
+```python
+from tools.audio._lib.pyo_lib import render_offline
+
+
+def _graph(pyo):
+    env = pyo.Adsr(attack=0.001, decay=0.06, sustain=0.0, release=0.05, dur=0.24)
+    sweep = pyo.Linseg([(0.0, 1400.0), (0.19, 180.0)], loop=False, initToFirstVal=True)
+    osc = pyo.Sine(freq=sweep, mul=env)
+    noise = pyo.Biquad(pyo.Noise(mul=env * 0.28), freq=1800, q=1.2)
+    mixed = osc + noise
+    mixed.out()
+    env.play()
+    return mixed  # 必须返回，否则对象被回收，离线渲染出静音
+
+
+render_offline(
+    path=output,
+    duration=0.24,
+    sample_rate=22050,
+    channels=1,
+    seed=20261106,
+    peak=0.72,
+    graph=_graph,
+)
+```
+
+规则：
+
+- **graph 必须返回最终对象**：`render_offline` 在 `start()` 期间持有它；只调用 `.out()` 不返回，Python 回收后 DSP 图会被移除，得到全零 WAV。`render_offline` 会拒绝 `None`，并在渲染后拒绝静音。
+- 服务器固定 `audio="offline"`、`nchnls=1`、`fileformat=0`、`sampletype=0`；`setGlobalSeed(seed)` 保证噪声可复现。
+- 渲染是阻塞的；不要在构建器里开实时 server。
+- 渲染后统一用 `normalize` + `write_wav(..., "PCM_16")`，再走 `verify_audio`；pyo 的缓冲会让时长略长于声明值，验收区间留 ±0.02 s。`edge_max` 等阈值写在 `_data/pyo_profiles.py`，不要散落在模块里。
+- 不要在构建里用 `pyo.Server(audio="portaudio")`；CI/无音频设备会失败。
+- Windows 上 pyo 的离线 server 会查询 PortAudio 设备并写一个固定临时文件；**不要并行跑多个 pyo 离线渲染**。`tools/audio/build.py` 是顺序执行，满足这一点。
+- pyo 首次导入会打印 WxPython/Tkinter 提示；离线渲染不需要 GUI，提示可忽略。
+
+示例模块是 `tools/audio/sfx/pyo_impact.py`，默认构建会自动发现：
+
+```bash
+python tools/audio/build.py --root .
+python tools/audio/build.py --root . --only sfx/pyo_impact
+python tools/audio/sfx/pyo_impact.py
+```
+
 ## 6. 无缝循环
 
 循环不是“首尾淡入淡出”，而是让循环点两侧来自连续信号。推荐四步：
@@ -162,10 +218,10 @@ looped[:fade_count] = tail * np.sin(ramp) + looped[:fade_count] * np.cos(ramp)
 | 4 | 峰值 | 在 `[peak_min, peak_max]` 内 |
 | 5 | 时长 | 在声明区间内 |
 | 6 | 循环缝 | 循环音频 `|first - last| <= seam_max`（经验值 0.04） |
-| 7 | 边缘阶跃 | 首/尾 10 ms 内最大相邻样本差不超过声明值 |
+| 7 | 首尾边界幅度 | 一次性音效 `max(|first|, |last|) <= edge_max`；循环音频用 seam 检查 |
 | 8 | 可复现 | 连续构建两次，WAV 与清单字节一致 |
 
-一次性音效把 `seam_max` 设为 `None`，但仍然检查峰值、时长、格式与边缘阶跃。
+一次性音效把 `seam_max` 设为 `None`，但仍然检查峰值、时长、格式与首尾边界幅度；阈值写在 profile 的 `edge_max`。`pyo` 输出走同一套 `verify_audio`；pyo 的缓冲会让时长略长，验收区间留 ±0.02 s，但格式、声道、位深、峰值不放宽。
 
 ## 10. 清单与运行时
 
@@ -221,4 +277,5 @@ python tools/audio/build.py --root . --only sfx/hit
 
 # 单独运行一个模块
 python tools/audio/sfx/hit.py
+python tools/audio/sfx/pyo_impact.py
 ```

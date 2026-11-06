@@ -55,7 +55,7 @@
 | 层 | 命令示例 | 检查 |
 |---|---|---|
 | 资产 | `python tools/art/build.py --root .` | 尺寸/色板/描边/底行 |
-| 音频 | `python tools/audio/build.py --root .` | 格式/峰值/时长/循环缝 |
+| 音频 | `python tools/audio/build.py --root .` | 格式/峰值/时长/循环缝/首尾边界 |
 | 确定性 | 连续构建两次 + `Get-FileHash` / `sha256sum` | 字节一致 |
 | 内容 | `godot --headless ... generator_test.tscn` | 3 万级断言：数据、地图连通性、注册表 |
 | 交互 | `godot --headless ... touch_test.tscn` | 触控、对话点击、选择框 |
@@ -149,5 +149,5 @@ godot --headless --export-debug "Android" build/android/game.apk
 - 调色板、动画表、音频 profile 改动后，必须重新构建并跑校验。
 - 大文件（WAV 母带、模板、构建产物）不进仓库；在 `.gitignore` 与导出预设里排除。
 - 保留生成器的确定性：固定 seed、固定采样率、固定 Python/依赖版本范围。
-- 记录依赖版本；`synthesizer`、Pillow、numpy、scipy 的大版本变化可能改变输出字节。
+- 记录依赖版本；`synthesizer`、Pillow、numpy、scipy、svgwrite、CairoSVG、pyo 的大版本变化可能改变输出字节。
 - 每加一个资产，问一次：它是“这张图/这段声音”的独立模块，还是又一个塞进单体生成器的例外？如果是后者，拆掉。

@@ -1,0 +1,5 @@
+Pillow>=10,<14
+numpy>=1.26,<3
+scipy>=1.11,<2
+soundfile>=0.12,<1
+synthesizer>=0.4,<1

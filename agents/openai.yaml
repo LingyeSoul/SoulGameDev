@@ -1,0 +1,4 @@
+interface:
+  display_name: "SoulGameDev"
+  short_description: "Ship games with per-asset procedural content pipelines"
+  default_prompt: "Use $SoulGameDev to scaffold a deterministic Pillow + synthesizer asset pipeline for my game."

@@ -7,7 +7,7 @@
 
 > 一个资产一个生成器，数据与绘制分离，构建即验证，重复构建字节一致。
 
-SoulGameDev 是一个 agent skill 加可复制的项目模板，服务于小型游戏团队的**确定性内容生产**。这套流程来自一个已发布的 Godot 4.7 2.5D 像素肉鸽：所有角色、地块、UI、VFX、音效、环境声和 BGM 都由 Python 生成，没有外部图片，也没有采样包。模板同时提供 Pillow 像素管线、`svgwrite` + `CairoSVG` 的 SVG 矢量管线、可选的 SpriteKiln 8 方向角色接入，以及 synthesizer/numpy/scipy + pyo 的音频管线。
+SoulGameDev 是一个 agent skill 加可复制的项目模板，服务于小型游戏团队的**确定性内容生产**。这套流程来自一个已发布的 Godot 4.7 2.5D 像素肉鸽：所有角色、地块、UI、VFX、音效、环境声和 BGM 都由 Python 生成，没有外部图片，也没有采样包。模板同时提供 Pillow 像素管线、`svgwrite` + `CairoSVG` 的 SVG 矢量管线、默认安装的 SpriteKiln 8 方向角色接入，以及 synthesizer/numpy/scipy + pyo 的音频管线。生成新的角色/敌人资产前，技能会先询问是否使用 SpriteKiln。
 
 生成内容应该像软件一样工作：模块小、合同明确、输出确定、检查不过就让构建失败。
 
@@ -30,7 +30,7 @@ SoulGameDev 是一个 agent skill 加可复制的项目模板，服务于小型�
 - `_data/`：调色板、动画表、矢量色板、音频 profile 和 pyo profile。
 - 三个美术示例模块（两个像素 + 一个 SVG）和三个默认音频模块（含 pyo 示例），全部带校验。
 - `scripts/scaffold.py`：把模板复制进已有仓库，拒绝覆盖文件。
-- `assets/project-template/scripts/kiln_import.py`：scaffold 后位于项目内 `scripts/kiln_import.py`，把 SpriteKiln 的 8 方向渲染导入 `art/_meta/spritekiln.json`。
+- `assets/project-template/scripts/kiln_import.py`：scaffold 后位于项目内 `scripts/kiln_import.py`，把 SpriteKiln 的 8 方向渲染导入 `art/_meta/spritekiln.json`；生成角色前会先询问是否使用 SpriteKiln。
 - `tools/audio/sfx/pyo_impact.py`：pyo 离线 DSP 示例，默认音频构建会包含它。
 - `references/`：管线规则、验收门禁，以及 Windows / Web / Android 交付清单。
 
@@ -54,10 +54,10 @@ npx skills add <path-to-this-repo> -g -y --copy
 ### 前置依赖
 
 - Python 3.12+。
-- Pillow、numpy、scipy、soundfile、synthesizer、svgwrite、CairoSVG、pyo：
+- Pillow、numpy、scipy、soundfile、synthesizer、svgwrite、CairoSVG、pyo、SpriteKiln：
 
 ```bash
-python -m pip install Pillow numpy scipy soundfile "synthesizer>=0.4" svgwrite CairoSVG "pyo>=1.1"
+python -m pip install Pillow numpy scipy soundfile "synthesizer>=0.4" svgwrite CairoSVG "pyo>=1.1,<2" "spritekiln[mcp]>=0.3,<0.4"
 ```
 
 Windows 上若 CairoSVG 报找不到 cairo，安装 GTK 3 运行时；详见 `references/art-pipeline.md` 第 6.6 节。scaffold 后统一用 `python -m pip install -r requirements.txt`。
@@ -70,7 +70,7 @@ python -m pip install -r requirements.txt
 
 - `awesome-gamedev-agent-skills` 技能包（`router`、`create-game-assets`、`audio-design`、`game-feel`、`godot-*`）。SoulGameDev 复用这些技能，不复制它们。用 `npx skills list -g` 检查；缺失时单独安装该技能包。
 - 可选：Godot 4.x。模板只产出资源，不绑定引擎。
-- 可选：`spritekiln` CLI（`uv tool install "spritekiln[mcp]"`），用于 8 方向骨骼动画角色。完整流程见 `references/spritekiln-pipeline.md`。
+- `spritekiln[mcp]>=0.3,<0.4` 是默认依赖，已包含在 `requirements.txt` 中；安装后 `spritekiln` 命令可用。也可以用 `uv tool install "spritekiln[mcp]"` 装到全局。
 - `pyo>=1.1` 是默认音频依赖，需要 Python 3.12+；已包含在 `requirements.txt` 中，不需要额外安装。
 
 ## 快速开始
@@ -132,6 +132,7 @@ tools/audio/sfx/pyo_impact.py       -> art/audio/sfx_pyo_impact.wav
 ```
 
 - 一张 sprite sheet 算一个输出。变体（暖焰 / 蓝焰、普通 / 精英、intro / death）各自一个模块，共享 `_lib` 和 `_data`。
+- 生成新的角色/敌人资产前，先询问是否使用 SpriteKiln（8 方向/侧视骨骼动画）；确认后再走对应管线，不要默认跑 SpriteKiln。
 - `_lib/` 只放通用能力，不含游戏内容。
 - `_data/` 放调色板、动画表、矢量色板、BPM、根音、时长和峰值。
 - 一个 SVG 模块输出一个 `.svg` 源 + 一个 CairoSVG 派生的 `.png`；PNG 必须登记进 `vectors` 清单。
@@ -153,7 +154,7 @@ SoulGameDev/
       tools/art/                 # 每个图片一个模块（含 vector/sigil.py）
       tools/audio/               # 每个音频一个模块（含 sfx/pyo_impact.py）
       scripts/kiln_import.py     # SpriteKiln 渲染 -> spritekiln.json
-      requirements.txt           # Pillow/numpy/scipy/soundfile/synthesizer/svgwrite/CairoSVG/pyo
+      requirements.txt           # Pillow/numpy/scipy/soundfile/synthesizer/svgwrite/CairoSVG/pyo/spritekiln
       .python-version            # 3.12
   scripts/
     scaffold.py                  # 复制模板，拒绝覆盖
@@ -305,6 +306,9 @@ Web 要额外注意：单线程导出，或正确配置 COOP/COEP 响应头；�
 
 **什么时候用 SVG，什么时候用 SpriteKiln？**
 UI、图标、Logo 用 SVG；需要 8 方向、骨骼/IK、事件帧的角色用 SpriteKiln；像素角色和地块继续用 Pillow。三者可以同时存在，但清单分开：`atlas.json` 管像素/矢量，`spritekiln.json` 管 8 方向角色。
+
+**生成角色时会强制用 SpriteKiln 吗？**
+不会。技能会在开始新角色/敌人前询问：SpriteKiln（8 方向/侧视骨骼动画）还是常规 Pillow/SVG；确认后才走对应管线。
 
 **什么时候用 pyo，什么时候用 synthesizer？**
 短音效、简单音调、噪声床和循环用 synthesizer + numpy/scipy；需要复杂多级滤波、颗粒、延迟/混响或参数曲线时用 pyo。pyo 需要 Python 3.12+，已包含在默认依赖和默认音频构建中。

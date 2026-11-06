@@ -17,6 +17,8 @@
    - 它按路径排序导入模块、调用 `build(root)`、合并元数据、写 `atlas.json`。
    - 新增资产 = 新增一个文件，不改构建器。
 
+**新角色/敌人开始前：先问用户是否使用 SpriteKiln（8 方向/侧视骨骼动画）。** 确认后再选择 Pillow/SVG 或 `references/spritekiln-pipeline.md`，不要默认选择 8 方向管线。
+
 ## 2. 目录契约
 
 ```text

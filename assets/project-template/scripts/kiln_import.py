@@ -18,6 +18,7 @@ import re
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -51,13 +52,25 @@ def read_json_object(path: Path, label: str) -> dict:
     return data
 
 
-def run_render(spec: Path, output_dir: Path, root: Path) -> None:
+def find_spritekiln() -> str:
     executable = shutil.which("spritekiln")
-    if executable is None:
-        raise SystemExit(
-            "spritekiln is not on PATH. Install it with: "
-            'uv tool install "spritekiln[mcp]"'
-        )
+    if executable is not None:
+        return executable
+    name = "spritekiln.exe" if sys.platform == "win32" else "spritekiln"
+    candidates = [Path(sys.executable).parent / name]
+    if sys.platform == "win32":
+        candidates.append(Path(sys.executable).parent / "Scripts" / name)
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    raise SystemExit(
+        "spritekiln is not available. Run `python -m pip install -r requirements.txt` "
+        "in the project environment."
+    )
+
+
+def run_render(spec: Path, output_dir: Path, root: Path) -> None:
+    executable = find_spritekiln()
     command = [executable, "render", str(spec), "-o", str(output_dir), "--force"]
     try:
         subprocess.run(command, cwd=root, check=True)

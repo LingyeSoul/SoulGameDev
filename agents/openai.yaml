@@ -1,4 +1,4 @@
 interface:
   display_name: "SoulGameDev"
-  short_description: "Ship games with deterministic per-asset pixel, SVG, audio and pyo pipelines"
-  default_prompt: "Use $SoulGameDev to scaffold a deterministic Pillow + SVG + synthesizer + pyo asset pipeline for my game, with optional SpriteKiln 8-direction characters."
+  short_description: "Ship games with deterministic per-asset pixel, SVG, SpriteKiln, audio and pyo pipelines"
+  default_prompt: "Use $SoulGameDev to scaffold a deterministic Pillow + SVG + synthesizer + pyo asset pipeline for my game, with a default SpriteKiln 8-direction pipeline and an ask-before-use choice."

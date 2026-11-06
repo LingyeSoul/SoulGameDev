@@ -21,7 +21,7 @@ SoulGameDev 不重复造轮子：以下全局技能是**前置依赖**，本技�
 | `audio-design` | 总线/混音、动态音乐、ducking、节拍同步 |
 | `game-feel` | 屏幕震动、hit-stop、缓动、打击感 |
 | `godot-*` | Godot 节点、脚本、物理、UI、导出细节 |
-| `spritekiln`（可选 CLI） | 8 方向/侧视骨骼动画角色：YAML → 像素图、法线、自发光 |
+| `spritekiln`（默认 CLI） | 8 方向/侧视骨骼动画角色：YAML → 像素图、法线、自发光；由 `requirements.txt` 默认安装 |
 
 先检查，已存在就直接用：
 
@@ -29,14 +29,14 @@ SoulGameDev 不重复造轮子：以下全局技能是**前置依赖**，本技�
 npx skills list -g
 ```
 
-输出里应包含 `router`、`create-game-assets`、`audio-design`、`game-feel`、`godot-export` 等。**已经装好就不要重复执行安装命令。** `spritekiln` 是可选的外部命令，用 `spritekiln --version` 检查；缺失时按 [references/spritekiln-pipeline.md](references/spritekiln-pipeline.md) 安装，**不要擅自全局重装**。
+输出里应包含 `router`、`create-game-assets`、`audio-design`、`game-feel`、`godot-export` 等。**已经装好就不要重复执行安装命令。** `spritekiln` 是默认依赖，已包含在项目的 `requirements.txt` 中；用 `spritekiln --version` 检查，缺失时先安装项目 requirements，**不要擅自全局重装**。
 
 `npx skills add` 只用于安装技能包，不用于安装前置依赖。前置包由宿主环境提供；如果检查发现缺失，先让主人安装前置包，不要擅自用它去装依赖。
 
 Python 依赖（Python 3.12+）：
 
 ```bash
-python -m pip install Pillow numpy scipy soundfile "synthesizer>=0.4" svgwrite CairoSVG "pyo>=1.1"
+python -m pip install Pillow numpy scipy soundfile "synthesizer>=0.4" svgwrite CairoSVG "pyo>=1.1,<2" "spritekiln[mcp]>=0.3,<0.4"
 ```
 
 ## 1. 不可妥协的架构规则
@@ -94,7 +94,7 @@ python tools/audio/sfx/hit.py
 
 1. **锁定技术合同。** 原生分辨率、窗口、拉伸、地块、角色尺寸、锚点、调色板、音频格式、碰撞层。只写一份，生成器/运行时/测试都引用它。
 2. **盘点现有资产。** 如果已有单体生成器，先按“输出图片/输出音频”建模块，再抽 `_lib` 与 `_data`；迁移后连续构建两次，SHA-256 必须一致。
-3. **先做一个代表资产。** 一个角色或一张地块，按真实尺寸、真实背景检查剪影与色板。通过后再做同类家族。
+3. **先做一个代表资产。** 一个角色或一张地块，按真实尺寸、真实背景检查剪影与色板。通过后再做同类家族。**如果是角色/敌人，先问是否使用 SpriteKiln（8 方向/侧视骨骼动画），确认后再进入对应管线。**
 4. **一资产一模块。** 模块只读数据、只写自己的输出、返回 JSON 可序列化的元数据。
 5. **构建即校验。** 尺寸、色板、描边、底行、颜色数、音频格式、峰值、时长、循环缝；失败信息带资产路径。
 6. **生成清单。** `atlas.json` 描述 sheet/cell/pivot/animations；`audio.json` 描述 key/path/bus/loop。运行时只读清单。
@@ -104,6 +104,8 @@ python tools/audio/sfx/hit.py
 ## 4. 美术：Pillow + SVG + SpriteKiln
 
 完整规则见 [references/art-pipeline.md](references/art-pipeline.md)，8 方向角色见 [references/spritekiln-pipeline.md](references/spritekiln-pipeline.md)。
+
+生成新的角色/敌人资产前，先询问是否使用 SpriteKiln；不要默认选择 8 方向管线。
 
 ### 4.1 Pillow（像素资产）
 
@@ -124,8 +126,10 @@ python tools/audio/sfx/hit.py
 - 文本先转路径或随包字体；不同机器的字体不保证一致。
 - 每个模块调用 `verify_vector` 与 `verify_raster`；失败即构建失败。
 
-### 4.3 SpriteKiln（可选，8 方向角色）
+### 4.3 SpriteKiln（8 方向角色）
 
+- 生成新的角色/敌人资产前，先询问是否使用 SpriteKiln（8 方向/侧视骨骼动画）；确认后再走本管线，不要默认跑 SpriteKiln。
+- 询问示例：“这个角色用 SpriteKiln（8 方向/侧视骨骼动画）还是常规 Pillow/SVG？”
 - 用 YAML 描述骨架/SDF/动画；`pose` 迭代，`render` 出 atlas + Aseprite JSON + normal/emissive。
 - `qa.json` 必须 `ok: true`；贴边先改 `size`、`camera.center` 或动作幅度，不改全局 `camera.scale`。
 - 用项目内 `scripts/kiln_import.py` 导入为 `art/_meta/spritekiln.json`；不要混进 `atlas.json`。
@@ -205,7 +209,7 @@ python tools/audio/sfx/hit.py
 | 总线/混音、动态音乐、ducking、节拍同步 | `audio-design` |
 | 屏幕震动、hit-stop、缓动、打击感 | `game-feel` |
 | Godot 节点/脚本/物理/UI/导出细节 | `godot-*` |
-| 8 方向/侧视骨骼动画角色 | `spritekiln`（可选 CLI），由本技能接入清单 |
+| 8 方向/侧视骨骼动画角色 | `spritekiln`（默认 CLI），由本技能接入清单 |
 | 原型限时、Game Jam、Steam/itch 发布 | `prototype-fast` / `game-jam` / `steam-publish` / `itch-publish` |
 | **确定性资产生成、一资产一模块、清单/校验/交付** | **本技能** |
 

@@ -7,3 +7,4 @@ synthesizer>=0.4,<1
 svgwrite>=1.4,<2
 CairoSVG>=2.7,<3
 pyo>=1.1,<2
+spritekiln[mcp]>=0.3,<0.4

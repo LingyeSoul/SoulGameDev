@@ -149,5 +149,5 @@ godot --headless --export-debug "Android" build/android/game.apk
 - 调色板、动画表、音频 profile 改动后，必须重新构建并跑校验。
 - 大文件（WAV 母带、模板、构建产物）不进仓库；在 `.gitignore` 与导出预设里排除。
 - 保留生成器的确定性：固定 seed、固定采样率、固定 Python/依赖版本范围。
-- 记录依赖版本；`synthesizer`、Pillow、numpy、scipy、svgwrite、CairoSVG、pyo 的大版本变化可能改变输出字节。
+- 记录依赖版本；`synthesizer`、Pillow、numpy、scipy、svgwrite、CairoSVG、pyo、spritekiln 的大版本变化可能改变输出字节。
 - 每加一个资产，问一次：它是“这张图/这段声音”的独立模块，还是又一个塞进单体生成器的例外？如果是后者，拆掉。

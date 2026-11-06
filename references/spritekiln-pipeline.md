@@ -1,6 +1,6 @@
 # SpriteKiln 管线 / 8 方向角色
 
-> SpriteKiln 是可选的高级角色来源：YAML 描述骨架、SDF 形状和动画，渲染成 8 方向或侧视的像素动画。它和 Pillow 管线是**两条并行产线**，共用同一套验收和清单纪律。
+> SpriteKiln 是默认安装的高级角色来源：YAML 描述骨架、SDF 形状和动画，渲染成 8 方向或侧视的像素动画。它和 Pillow 管线是**两条并行产线**，共用同一套验收和清单纪律。生成新的角色/敌人资产前，先询问用户是否使用 SpriteKiln，确认后再走本管线。
 
 ## 1. 什么时候用
 
@@ -12,16 +12,19 @@
 | 侧视平台跳跃角色，需要 run/jump/rise/fall/land 全套 | **SpriteKiln**（`view: side`） |
 | 需要复杂位图纹理或手绘细节 | Pillow 或外部 DCC；不要让 SVG 硬拼 |
 
-SpriteKiln 适合“同一角色在 8 个方向、多个动作下保持构造一致”的场景；它不替代单张像素图的快速迭代。
+SpriteKiln 适合“同一角色在 8 个方向、多个动作下保持构造一致”的场景；它不替代单张像素图的快速迭代。**开始一个新角色前先问用户是否使用 SpriteKiln；得到确认前不要运行 `spritekiln init/render`。** 询问示例：“这个角色用 SpriteKiln（8 方向/侧视骨骼动画）还是常规 Pillow/SVG？”
 
 ## 2. 安装与锁定版本
 
+默认随项目依赖安装：
+
 ```bash
-uv tool install "spritekiln[mcp]"
+python -m pip install -r requirements.txt
 spritekiln --version
 ```
 
-- `[mcp]` 让 `spritekiln mcp` 暴露 14 个工具（`pose`、`render`、`review` 等），可选。
+- 项目的 `requirements.txt` 包含 `spritekiln[mcp]>=0.3,<0.4`；`[mcp]` 让 `spritekiln mcp` 暴露 14 个工具（`pose`、`render`、`review` 等）。
+- 也可以全局安装：`uv tool install "spritekiln[mcp]"`；`scripts/kiln_import.py` 会先找 PATH，再找当前 Python 环境的 `Scripts/bin`。
 - `[fast]` 额外安装编译渲染器，约 6 倍速；只在确认目标平台可用时加。
 - **在项目里记录版本**（例如 `spritekiln==0.3.*`）。不同版本的着色/几何可能变化；升级后必须重新渲染并审查差异，不能当作无变更。
 

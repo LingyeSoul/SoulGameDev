@@ -19,7 +19,7 @@
 ## 2. 依赖与格式合同
 
 ```bash
-python -m pip install numpy scipy soundfile "synthesizer>=0.4" "pyo>=1.1"
+python -m pip install numpy scipy soundfile "synthesizer>=0.4" "pyo>=1.1,<2"
 ```
 
 `synthesizer` 负责音调层（振荡器 + 双振荡器失谐 + 低通/高通/带通 + LFO），`numpy`/`scipy` 负责噪声床、包络、滤波、混音、循环与混响。`pyo` 是默认的离线 DSP 后端，适合复杂信号图；需要 Python 3.12+。

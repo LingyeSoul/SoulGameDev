@@ -1,5 +1,5 @@
 ---
-name: SoulGameDev
+name: soulgamedev
 description: SoulGameDev — build small, polished games with a deterministic, per-asset content pipeline. Use when building or finishing a game and the work involves procedurally generated pixel art with Pillow, SVG vector assets with svgwrite and CairoSVG, 8-direction sprites with SpriteKiln, generated audio with synthesizer and pyo offline DSP, one generator module per image or sound, palette/atlas validation, seamless audio loops, data-driven Godot content, headless tests, or Windows/Web/Android delivery. Triggers include "SoulGameDev", "asset pipeline", "procedural pixel art", "SVG", "vector asset", "CairoSVG", "SpriteKiln", "pyo", "DSP", "generate sprites", "generate audio", "one asset one script", "atlas", "seamless loop", "vertical slice", "ship the game".
 license: MIT
 ---
